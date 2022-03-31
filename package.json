@@ -1,0 +1,24 @@
+{
+  "name": "release-notes-slack",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "release:dry": "standard-version --dry-run",
+    "release": "standard-version --no-verify"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/subhanmahmood/release-notes-slack.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/subhanmahmood/release-notes-slack/issues"
+  },
+  "homepage": "https://github.com/subhanmahmood/release-notes-slack#readme",
+  "devDependencies": {
+    "standard-version": "^9.3.2"
+  }
+}
