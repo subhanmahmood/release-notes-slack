@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [1.1.1](https://github.com/subhanmahmood/release-notes-slack/compare/v1.1.0...v1.1.1) (2022-03-31)
+
+
+### Bug Fixes
+
+* fixed release workflow ([2cf7ee9](https://github.com/subhanmahmood/release-notes-slack/commit/2cf7ee9b7837115b74392d6d4b03b2ab3b50afc9))
+
 ## 1.1.0 (2022-03-31)
 
 
