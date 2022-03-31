@@ -1,0 +1,88 @@
+name: Releases (pr)
+on: [push, pull_request]
+
+jobs:
+  send-message:
+    runs-on: ubuntu-latest
+
+    if: endsWith(github.ref, '/staging') || endsWith(github.ref, '/production')
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v1
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      # Outputs variables used in the workflow, to check their values
+      - name: Sanity Check
+        run: |
+          echo "${{ github.ref }}"
+          echo "${{ github.head_ref }}"
+          echo "${{ github.base_ref }}"
+
+      - name: Extract branch name
+        run: |
+          raw=$(git branch -r --contains ${{ github.ref }})
+          branch=${raw##*/}
+          echo "BRANCH=$branch" >> $GITHUB_ENV
+        id: extract_branch
+
+      - name: Set Slack Webhook URL (alpha)
+        if: env.BRANCH == 'alpha'
+        run: |
+          echo "SLACK_WEBHOOK_URL=${{secrets.SLACK_WEBHOOK_URL_ALPHA}}" >> $GITHUB_ENV
+
+      - name: Set Slack Webhook URL (staging)
+        if: env.BRANCH == 'staging'
+        run: |
+          echo "SLACK_WEBHOOK_URL=${{secrets.SLACK_WEBHOOK_URL_STAGING}}" >> $GITHUB_ENV
+
+      - name: Set Slack Webhook URL (production)
+        if: env.BRANCH == 'production'
+        run: |
+          echo "SLACK_WEBHOOK_URL=${{secrets.SLACK_WEBHOOK_URL_PRODUCTION}}" >> $GITHUB_ENV
+
+      - name: 'Get Latest tag'
+        id: get-latest-tag
+        uses: "WyriHaximus/github-action-get-previous-tag@v1"
+        with:
+          fallback: 1.0.0 # Optional fallback tag to use when no tag can be found
+
+      - name: Set current tag environment variable
+        run: |
+          export CURRENT_TAG=${{steps.get-latest-tag.outputs.tag}}
+          echo "CURRENT_TAG=$CURRENT_TAG" >> $GITHUB_ENV
+
+      - name: Retrieve release details
+        id: release-details
+        run: |
+          echo $CURRENT_TAG
+          RELEASE_TITLE=$(gh release view $CURRENT_TAG --json tagName --jq .tagName)
+
+          RELEASE_BODY=$(gh release view $CURRENT_TAG --json body --jq .body)
+          RELEASE_BODY="${RELEASE_BODY//'%'/'%25'}"
+          RELEASE_BODY="${RELEASE_BODY//$'\n'/'%0A'}"
+          RELEASE_BODY="${RELEASE_BODY//$'\r'/'%0D'}"
+
+          echo "::set-output name=RELEASE_TITLE::$RELEASE_TITLE"
+          echo "::set-output name=RELEASE_BODY::$RELEASE_BODY"
+        env:
+          CURRENT_TAG: ${{ env.CURRENT_TAG }}
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+
+      - name: Convert Github release notes markdown to Slack markdown
+        id: formatted-release-body
+        uses: LoveToKnow/slackify-markdown-action@v1.0.0
+        with:
+          text: ${{ steps.release-details.outputs.RELEASE_BODY }}
+
+      - uses: homeday-de/slack-release-bot-action@main
+        with:
+          webhook_url: ${{ env.SLACK_WEBHOOK_URL }}
+          title: "OrderPay Web Ordering (${{ env.BRANCH }}) ${{ steps.release-details.outputs.RELEASE_TITLE }}"
+          body: ${{ steps.formatted-release-body.outputs.text }}
+          context: "OrderPay Web Ordering @ ${{ env.BRANCH }}"

@@ -1,0 +1,127 @@
+x§name: Releases (tags)
+on: 
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  create-release:
+    # The type of runner that the job will run on
+    runs-on: [ubuntu-latest]
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - name: Checkout repo
+        uses: actions/checkout@v2
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+
+      # Use LTS node version
+      - uses: actions/setup-node@v2
+        with:
+          node-version: 'lts/*'
+
+      - name: Get release details
+        id: release_details
+        run: |
+          # Parse changelog
+          CHANGELOG=$(./utils/parse_changelog.sh)
+          MARKDOWN_CHANGELOG=$(echo $CHANGELOG | ./utils/markdown_to_html.sh)
+          echo "::set-output name=changelog::$CHANGELOG"
+          echo "::set-output name=markdown::"$MARKDOWN_CHANGELOG""
+          echo "::set-output name=version::${GITHUB_REF#refs/*/}"
+
+      # Create changelog
+      - name: Changelog
+        id: changelog
+        run: |
+          # sanity check
+          echo "Got changelog: ${{steps.release_details.outputs.changelog}}"
+          echo "Got markdown of changelog: ${{steps.release_details.outputs.markdown}}"
+
+      # Create github release
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@latest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: ${{ github.ref }}
+          body: |
+            ${{ steps.release_details.outputs.changelog }}
+          draft: false
+          prerelease: false
+
+  send-message:
+    needs: create-release
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v1
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Extract branch name
+        run: |
+          raw=$(git branch -r --contains ${{ github.ref }})
+          branch=${raw##*/}
+          echo "BRANCH=$branch" >> $GITHUB_ENV
+        id: extract_branch
+
+      - name: Configure service specific deployment settings
+        run: |
+          export CURRENT_TAG=${GITHUB_REF#refs/*/}
+          echo "CURRENT_TAG=$CURRENT_TAG" >> $GITHUB_ENV
+
+      - name: Retrieve release details
+        id: release-details
+        run: |
+          echo $CURRENT_TAG
+          RELEASE_TITLE=$(gh release view $CURRENT_TAG --json tagName --jq .tagName)
+
+          RELEASE_BODY=$(gh release view $CURRENT_TAG --json body --jq .body)
+          RELEASE_BODY="${RELEASE_BODY//'%'/'%25'}"
+          RELEASE_BODY="${RELEASE_BODY//$'\n'/'%0A'}"
+          RELEASE_BODY="${RELEASE_BODY//$'\r'/'%0D'}"
+
+          echo "::set-output name=RELEASE_TITLE::$RELEASE_TITLE"
+          echo "::set-output name=RELEASE_BODY::$RELEASE_BODY"
+        env:
+          CURRENT_TAG: ${{ env.CURRENT_TAG }}
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        
+      - name: Convert Github release notes markdown to Slack markdown
+        id: formatted-release-body
+        uses: LoveToKnow/slackify-markdown-action@v1.0.0
+        with:
+          text: ${{ steps.release-details.outputs.RELEASE_BODY }}
+
+      - name: Set Slack Webhook URL (alpha)
+        if: env.BRANCH == 'alpha'
+        run: |
+          echo "SLACK_WEBHOOK_URL=${{secrets.SLACK_WEBHOOK_URL_ALPHA}}" >> $GITHUB_ENV
+      
+      - name: Set Slack Webhook URL (staging)
+        if: env.BRANCH == 'staging'
+        run: |
+          echo "SLACK_WEBHOOK_URL=${{secrets.SLACK_WEBHOOK_URL_STAGING}}" >> $GITHUB_ENV
+      
+      - name: Set Slack Webhook URL (production)
+        if: env.BRANCH == 'production'
+        run: |
+          echo "SLACK_WEBHOOK_URL=${{secrets.SLACK_WEBHOOK_URL_PRODUCTION}}" >> $GITHUB_ENV
+
+      - uses: homeday-de/slack-release-bot-action@main
+        with:
+          webhook_url: ${{ env.SLACK_WEBHOOK_URL }}
+          title: "OrderPay Web Ordering ${{ env.BRANCH }} ${{ steps.release-details.outputs.RELEASE_TITLE }}"
+          body: ${{ steps.formatted-release-body.outputs.text }}
+          context: "OrderPay Web Ordering @ ${{ env.BRANCH }}"
+
