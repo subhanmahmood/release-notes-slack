@@ -1,4 +1,4 @@
-x§name: Releases (tags)
+name: Releases (tags)
 on: 
   push:
     tags:
@@ -95,7 +95,7 @@ jobs:
           echo "::set-output name=RELEASE_BODY::$RELEASE_BODY"
         env:
           CURRENT_TAG: ${{ env.CURRENT_TAG }}
-          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.RELEASE_NOTES }}
         
       - name: Convert Github release notes markdown to Slack markdown
         id: formatted-release-body
