@@ -1,5 +1,5 @@
 name: Releases (pr)
-on: [push, pull_request]
+on: [pull_request]
 
 jobs:
   send-message:
